@@ -26,12 +26,16 @@ const ProductsPage: React.FC = () => {
   const sortOption = searchParams.get('sort') || 'created_at-desc';
 
   const fetchData = useCallback(async () => {
+    console.log("ProductsPage: Starting data fetch...");
     if (!isMounted.current) return;
     setLoading(true);
     setError(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+    const timeoutId = setTimeout(() => {
+        console.log("ProductsPage: Fetch timed out.");
+        controller.abort();
+    }, 10000);
 
     try {
       const categoriesPromise = supabase.from('categories').select('*').abortSignal(controller.signal);
@@ -60,7 +64,7 @@ const ProductsPage: React.FC = () => {
       if (categoriesResult.status === 'fulfilled' && categoriesResult.value.data) {
         setCategories(categoriesResult.value.data);
       } else if (categoriesResult.status === 'rejected') {
-        console.error("Error fetching categories:", categoriesResult.reason);
+        console.error("ProductsPage: Error fetching categories:", categoriesResult.reason);
       }
 
       if (productsResult.status === 'fulfilled' && productsResult.value.data) {
@@ -70,16 +74,17 @@ const ProductsPage: React.FC = () => {
       }
     } catch (err: any) {
       if (!isMounted.current) return;
-      console.error("Failed to fetch products:", err);
+      console.error("ProductsPage: Failed to fetch products:", err);
       if (err.name === 'AbortError') {
         setError('The request took too long. Please try again.');
       } else {
-        setError('Failed to load cycles. Please try again.');
+        setError('No data found / Database error. Please try again.');
       }
     } finally {
       clearTimeout(timeoutId);
       if (isMounted.current) {
         setLoading(false);
+        console.log("ProductsPage: Finished data fetch.");
       }
     }
   }, [selectedCategory, sortOption]);

@@ -22,12 +22,16 @@ const HomePage: React.FC = () => {
   }, []);
 
   const fetchData = useCallback(async () => {
+    console.log("HomePage: Starting data fetch...");
     if (!isMounted.current) return;
     setLoading(true);
     setError(null);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => {
+        console.log("HomePage: Fetch timed out.");
+        controller.abort();
+    }, 10000);
 
     try {
       const categoriesPromise = supabase
@@ -54,7 +58,7 @@ const HomePage: React.FC = () => {
       if (categoriesResult.status === 'fulfilled' && categoriesResult.value.data) {
         setCategories(categoriesResult.value.data);
       } else if (categoriesResult.status === 'rejected') {
-        console.error("Error fetching categories:", categoriesResult.reason);
+        console.error("HomePage: Error fetching categories:", categoriesResult.reason);
       }
 
       if (productsResult.status === 'fulfilled' && productsResult.value.data) {
@@ -64,16 +68,17 @@ const HomePage: React.FC = () => {
       }
     } catch (err: any) {
       if (!isMounted.current) return;
-      console.error("Failed to fetch home page data:", err);
+      console.error("HomePage: Failed to fetch data:", err);
       if (err.name === 'AbortError') {
         setError('The request took too long. Please try again.');
       } else {
-        setError('Failed to load data. Please try again.');
+        setError('No data found / Database error. Please try again.');
       }
     } finally {
       clearTimeout(timeoutId);
       if (isMounted.current) {
         setLoading(false);
+        console.log("HomePage: Finished data fetch.");
       }
     }
   }, []);
@@ -121,22 +126,26 @@ const HomePage: React.FC = () => {
       <section className="py-16 sm:py-24">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center text-white mb-10">Shop by Category</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {categories.map((category) => (
-              <Link key={category.id} to={`/products?category=${category.id}`} className="group block">
-                <div className="relative aspect-w-1 aspect-h-1 rounded-lg overflow-hidden">
-                  <img
-                    src={category.image_url || `https://picsum.photos/seed/${category.id}/500/500`}
-                    alt={category.name}
-                    className="w-full h-full object-cover object-center"
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center group-hover:bg-opacity-60 transition-all duration-300">
-                    <h3 className="text-2xl font-semibold text-white">{category.name}</h3>
+          {categories.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {categories.map((category) => (
+                <Link key={category.id} to={`/products?category=${category.id}`} className="group block">
+                  <div className="relative aspect-w-1 aspect-h-1 rounded-lg overflow-hidden">
+                    <img
+                      src={category.image_url || `https://picsum.photos/seed/${category.id}/500/500`}
+                      alt={category.name}
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center group-hover:bg-opacity-60 transition-all duration-300">
+                      <h3 className="text-2xl font-semibold text-white">{category.name}</h3>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-gray-400">No categories available at the moment.</p>
+          )}
         </div>
       </section>
 
@@ -144,11 +153,15 @@ const HomePage: React.FC = () => {
       <section className="py-16 sm:py-24 bg-brand-dark-light">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-center text-white mb-10">Featured Cycles</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {featuredProducts.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+              {featuredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : (
+             <p className="text-center text-gray-400">No featured products available at the moment.</p>
+          )}
         </div>
       </section>
     </div>
