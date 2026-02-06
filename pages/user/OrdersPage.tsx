@@ -1,28 +1,60 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabase';
 import { OrderWithItems } from '../../types';
 import Spinner from '../../components/ui/Spinner';
+import Button from '../../components/ui/Button';
 
 const OrdersPage: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     if (!user) return;
+    if (!isMounted.current) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(*, products(*))')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    setError(null);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    if (data) {
-      setOrders(data as OrderWithItems[]);
+    try {
+        const { data, error: dbError } = await supabase
+          .from('orders')
+          .select('*, order_items(*, products(*))')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .abortSignal(controller.signal);
+
+        if (dbError) throw dbError;
+        if (isMounted.current) {
+          setOrders(data as OrderWithItems[]);
+        }
+    } catch(err: any) {
+        if (!isMounted.current) return;
+        console.error("Failed to fetch orders:", err);
+        if (err.name === 'AbortError') {
+            setError('Request timed out. Please try again.');
+        } else {
+            setError('Failed to load your orders. Please try again.');
+        }
+    } finally {
+        clearTimeout(timeoutId);
+        if (isMounted.current) {
+            setLoading(false);
+        }
     }
-    setLoading(false);
   }, [user]);
 
   useEffect(() => {
@@ -43,6 +75,15 @@ const OrdersPage: React.FC = () => {
 
   if (loading) {
     return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
+  }
+  
+  if (error) {
+    return (
+      <div className="container mx-auto text-center py-20">
+        <p className="text-red-400 mb-4">{error}</p>
+        <Button onClick={fetchOrders}>Retry</Button>
+      </div>
+    );
   }
 
   return (

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabase';
@@ -12,17 +12,48 @@ const CartPage: React.FC = () => {
   const { user } = useAuth();
   const [cartItems, setCartItems] = useState<CartItemWithProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchCartItems = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('cart')
-      .select('*, products(*)')
-      .eq('user_id', user.id);
+    if (!isMounted.current) return;
     
-    if (data) setCartItems(data as CartItemWithProduct[]);
-    setLoading(false);
+    setLoading(true);
+    setError(null);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const { data, error: dbError } = await supabase
+        .from('cart')
+        .select('*, products(*)')
+        .eq('user_id', user.id)
+        .abortSignal(controller.signal);
+      
+      if (dbError) throw dbError;
+      if (isMounted.current) setCartItems(data as CartItemWithProduct[]);
+
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      console.error("Failed to fetch cart:", err);
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please try again.');
+      } else {
+        setError('Failed to load your cart. Please try again.');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isMounted.current) setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -31,19 +62,31 @@ const CartPage: React.FC = () => {
   
   const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
-    const { error } = await supabase
-        .from('cart')
-        .update({ quantity: newQuantity })
-        .eq('id', itemId);
-    if (!error) fetchCartItems();
+    try {
+      const { error } = await supabase
+          .from('cart')
+          .update({ quantity: newQuantity })
+          .eq('id', itemId);
+      if (error) throw error;
+      fetchCartItems();
+    } catch (err: any) {
+        console.error("Error updating quantity:", err);
+        alert("Could not update cart quantity.");
+    }
   }
 
   const handleRemoveItem = async (itemId: string) => {
-    const { error } = await supabase
-        .from('cart')
-        .delete()
-        .eq('id', itemId);
-    if (!error) fetchCartItems();
+    try {
+      const { error } = await supabase
+          .from('cart')
+          .delete()
+          .eq('id', itemId);
+      if (error) throw error;
+      fetchCartItems();
+    } catch(err: any) {
+        console.error("Error removing item:", err);
+        alert("Could not remove item from cart.");
+    }
   }
 
   const cartTotal = cartItems.reduce((total, item) => {
@@ -53,6 +96,15 @@ const CartPage: React.FC = () => {
 
   if (loading) {
     return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
+  }
+  
+  if (error) {
+    return (
+      <div className="container mx-auto text-center py-20">
+        <p className="text-red-400 mb-4">{error}</p>
+        <Button onClick={fetchCartItems}>Retry</Button>
+      </div>
+    );
   }
 
   return (

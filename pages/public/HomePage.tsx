@@ -1,43 +1,98 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { Category, Product } from '../../types';
 import Spinner from '../../components/ui/Spinner';
 import ProductCard from '../../components/ProductCard';
+import Button from '../../components/ui/Button';
 
 const HomePage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      const { data: categoriesData, error: categoriesError } = await supabase
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!isMounted.current) return;
+    setLoading(true);
+    setError(null);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const categoriesPromise = supabase
         .from('categories')
         .select('*')
-        .limit(4);
+        .limit(4)
+        .abortSignal(controller.signal);
 
-      if (categoriesData) setCategories(categoriesData);
-
-      const { data: productsData, error: productsError } = await supabase
+      const productsPromise = supabase
         .from('products')
         .select('*')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(8);
-      
-      if (productsData) setFeaturedProducts(productsData);
+        .limit(8)
+        .abortSignal(controller.signal);
 
-      setLoading(false);
-    };
+      const [categoriesResult, productsResult] = await Promise.allSettled([
+        categoriesPromise,
+        productsPromise
+      ]);
 
-    fetchData();
+      if (!isMounted.current) return;
+
+      if (categoriesResult.status === 'fulfilled' && categoriesResult.value.data) {
+        setCategories(categoriesResult.value.data);
+      } else if (categoriesResult.status === 'rejected') {
+        console.error("Error fetching categories:", categoriesResult.reason);
+      }
+
+      if (productsResult.status === 'fulfilled' && productsResult.value.data) {
+        setFeaturedProducts(productsResult.value.data);
+      } else if (productsResult.status === 'rejected') {
+        throw productsResult.reason;
+      }
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      console.error("Failed to fetch home page data:", err);
+      if (err.name === 'AbortError') {
+        setError('The request took too long. Please try again.');
+      } else {
+        setError('Failed to load data. Please try again.');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   if (loading) {
     return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center text-center">
+        <p className="text-red-400 mb-4">{error}</p>
+        <Button onClick={fetchData}>Retry</Button>
+      </div>
+    );
   }
 
   return (

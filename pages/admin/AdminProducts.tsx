@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import { Product, Category } from '../../types';
 import Spinner from '../../components/ui/Spinner';
@@ -11,21 +11,46 @@ const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formState, setFormState] = useState<Partial<Product>>({});
   const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchProducts = useCallback(async () => {
+    if (!isMounted.current) return;
     setLoading(true);
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (data) setProducts(data);
-    setLoading(false);
+    setError(null);
+    try {
+      const { data, error: dbError } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+      if (dbError) throw dbError;
+      if (isMounted.current) setProducts(data);
+    } catch (err: any) {
+        if (!isMounted.current) return;
+        console.error("Error fetching products:", err);
+        setError("Could not load products. Please try again.");
+    } finally {
+        if (isMounted.current) setLoading(false);
+    }
   }, []);
 
   const fetchCategories = useCallback(async () => {
-    const { data } = await supabase.from('categories').select('*');
-    if (data) setCategories(data);
+    try {
+        const { data, error } = await supabase.from('categories').select('*');
+        if (error) throw error;
+        if (isMounted.current) setCategories(data || []);
+    } catch(err: any) {
+        console.error("Error fetching categories:", err);
+        alert("Could not load categories. Some functionality might be limited.");
+    }
   }, []);
 
   useEffect(() => {
@@ -63,33 +88,36 @@ const AdminProducts: React.FC = () => {
         return;
     }
 
-    let imageUrls = formState.images || [];
+    try {
+        let imageUrls = formState.images || [];
 
-    if (imageFiles.length > 0) {
-        const uploadPromises = imageFiles.map(async file => {
-            const fileName = `${Date.now()}-${file.name}`;
-            const { data, error } = await supabase.storage.from('product_images').upload(fileName, file);
+        if (imageFiles.length > 0) {
+            const uploadPromises = imageFiles.map(async file => {
+                const fileName = `${Date.now()}-${file.name}`;
+                const { data, error } = await supabase.storage.from('product_images').upload(fileName, file);
+                if (error) throw error;
+                const { data: { publicUrl } } = supabase.storage.from('product_images').getPublicUrl(data.path);
+                return publicUrl;
+            });
+            const uploadedUrls = await Promise.all(uploadPromises);
+            imageUrls.push(...uploadedUrls);
+        }
+        
+        const productData = { ...formState, images: imageUrls };
+
+        if (editingProduct) {
+            const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
             if (error) throw error;
-            const { data: { publicUrl } } = supabase.storage.from('product_images').getPublicUrl(data.path);
-            return publicUrl;
-        });
-        const uploadedUrls = await Promise.all(uploadPromises);
-        imageUrls.push(...uploadedUrls);
+        } else {
+            const { error } = await supabase.from('products').insert(productData);
+            if (error) throw error;
+        }
+        fetchProducts();
+        closeModal();
+    } catch (err: any) {
+        console.error("Error saving product:", err);
+        alert(`Failed to save product: ${err.message}`);
     }
-    
-    const productData = { ...formState, images: imageUrls };
-
-    if (editingProduct) {
-        // Update
-        const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
-        if (error) alert(error.message);
-    } else {
-        // Create
-        const { error } = await supabase.from('products').insert(productData);
-        if (error) alert(error.message);
-    }
-    fetchProducts();
-    closeModal();
   };
 
   const handleDelete = async (productId: string) => {
@@ -99,16 +127,19 @@ const AdminProducts: React.FC = () => {
         else fetchProducts();
     }
   };
-
-  if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-white">Manage Products</h1>
-        <Button onClick={() => openModal()}><Plus className="mr-2" />Add Product</Button>
-      </div>
-      <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
+  
+  const renderContent = () => {
+    if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>
+    if (error) {
+        return (
+          <div className="text-center py-20 bg-brand-dark-light rounded-lg">
+            <p className="text-xl text-red-400">{error}</p>
+            <Button className="mt-6" onClick={fetchProducts}>Retry</Button>
+          </div>
+        );
+    }
+    return (
+        <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
         <table className="w-full text-sm text-left text-gray-300">
           <thead className="text-xs text-gray-400 uppercase bg-brand-gray">
             <tr>
@@ -139,6 +170,16 @@ const AdminProducts: React.FC = () => {
           </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-white">Manage Products</h1>
+        <Button onClick={() => openModal()}><Plus className="mr-2" />Add Product</Button>
+      </div>
+      {renderContent()}
       {isModalOpen && (
          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
            <div className="bg-brand-dark-light p-8 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -162,7 +203,7 @@ const AdminProducts: React.FC = () => {
                </div>
                <div>
                   <label className="block text-sm font-medium mb-1">Images (multi-select)</label>
-                  <input type="file" multiple onChange={handleImageChange} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-yellow file:text-brand-dark hover:file:bg-yellow-300"/>
+                  <input type="file" multiple onChange={handleImageChange} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-orange file:text-brand-dark hover:file:bg-orange-500"/>
                   {formState.images && <div className="mt-2 text-xs text-gray-500">{formState.images.length} existing images.</div>}
                </div>
                <div className="flex items-center space-x-2">

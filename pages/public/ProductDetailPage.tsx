@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { Product } from '../../types';
@@ -12,31 +12,64 @@ const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      if (!id) return;
-      setLoading(true);
-      const { data, error } = await supabase
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const fetchProduct = useCallback(async () => {
+    if (!id) return;
+    if (!isMounted.current) return;
+
+    setLoading(true);
+    setError(null);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const { data, error: dbError } = await supabase
         .from('products')
         .select('*')
         .eq('id', id)
-        .single();
+        .single()
+        .abortSignal(controller.signal);
       
-      if (data) {
+      if (dbError) throw dbError;
+
+      if (isMounted.current) {
         setProduct(data);
         setSelectedImage(data.images?.[0] || null);
       }
-      setLoading(false);
-    };
-
-    fetchProduct();
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      console.error("Failed to fetch product:", err);
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please try again.');
+      } else {
+        setError('Failed to load product details. Please try again.');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchProduct();
+  }, [fetchProduct]);
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -50,33 +83,46 @@ const ProductDetailPage: React.FC = () => {
     
     setAddingToCart(true);
 
-    const { data: existingCartItem, error: fetchError } = await supabase
-      .from('cart')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('product_id', product.id)
-      .single();
+    try {
+      const { data: existingCartItem } = await supabase
+        .from('cart')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('product_id', product.id)
+        .single();
 
-    if (existingCartItem) {
-      const newQuantity = existingCartItem.quantity + quantity;
-      const { error } = await supabase
-        .from('cart')
-        .update({ quantity: newQuantity })
-        .eq('id', existingCartItem.id);
-      if (error) alert("Error updating cart.");
-      else alert("Product quantity updated in cart.");
-    } else {
-      const { error } = await supabase
-        .from('cart')
-        .insert({ user_id: user.id, product_id: product.id, quantity: quantity });
-      if (error) alert("Error adding to cart.");
-      else alert("Product added to cart.");
+      if (existingCartItem) {
+        const newQuantity = existingCartItem.quantity + quantity;
+        const { error } = await supabase
+          .from('cart')
+          .update({ quantity: newQuantity })
+          .eq('id', existingCartItem.id);
+        if (error) throw error;
+        alert("Product quantity updated in cart.");
+      } else {
+        const { error } = await supabase
+          .from('cart')
+          .insert({ user_id: user.id, product_id: product.id, quantity: quantity });
+        if (error) throw error;
+        alert("Product added to cart.");
+      }
+    } catch (err: any) {
+      console.error("Error adding to cart:", err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      setAddingToCart(false);
     }
-    
-    setAddingToCart(false);
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
+  if (error) {
+    return (
+      <div className="container mx-auto text-center py-20">
+        <p className="text-red-400 mb-4">{error}</p>
+        <Button onClick={fetchProduct}>Retry</Button>
+      </div>
+    );
+  }
   if (!product) return <div className="text-center py-20">Product not found.</div>;
 
   const displayPrice = product.discount_price ?? product.price;

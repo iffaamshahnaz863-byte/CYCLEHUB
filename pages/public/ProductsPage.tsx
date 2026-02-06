@@ -1,54 +1,92 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../services/supabase';
 import { Product, Category } from '../../types';
 import Spinner from '../../components/ui/Spinner';
 import ProductCard from '../../components/ProductCard';
+import Button from '../../components/ui/Button';
 
 const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
   
   const selectedCategory = searchParams.get('category');
   const sortOption = searchParams.get('sort') || 'created_at-desc';
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const { data } = await supabase.from('categories').select('*');
-      if (data) setCategories(data);
-    };
-    fetchCategories();
-  }, []);
+  const fetchData = useCallback(async () => {
+    if (!isMounted.current) return;
+    setLoading(true);
+    setError(null);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      let query = supabase
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+    try {
+      const categoriesPromise = supabase.from('categories').select('*').abortSignal(controller.signal);
+      
+      let productsQuery = supabase
         .from('products')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .abortSignal(controller.signal);
 
       if (selectedCategory) {
-        query = query.eq('category_id', selectedCategory);
+        productsQuery = productsQuery.eq('category_id', selectedCategory);
       }
-
       const [sortKey, sortOrder] = sortOption.split('-');
       if (sortKey && sortOrder) {
-        query = query.order(sortKey, { ascending: sortOrder === 'asc' });
+        productsQuery = productsQuery.order(sortKey, { ascending: sortOrder === 'asc' });
       }
 
-      const { data, error } = await query;
+      const [categoriesResult, productsResult] = await Promise.allSettled([
+          categoriesPromise,
+          productsQuery
+      ]);
 
-      if (data) setProducts(data);
-      if(error) console.error(error);
-      setLoading(false);
-    };
+      if (!isMounted.current) return;
 
-    fetchProducts();
+      if (categoriesResult.status === 'fulfilled' && categoriesResult.value.data) {
+        setCategories(categoriesResult.value.data);
+      } else if (categoriesResult.status === 'rejected') {
+        console.error("Error fetching categories:", categoriesResult.reason);
+      }
+
+      if (productsResult.status === 'fulfilled' && productsResult.value.data) {
+        setProducts(productsResult.value.data);
+      } else if (productsResult.status === 'rejected') {
+        throw productsResult.reason;
+      }
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      console.error("Failed to fetch products:", err);
+      if (err.name === 'AbortError') {
+        setError('The request took too long. Please try again.');
+      } else {
+        setError('Failed to load cycles. Please try again.');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
   }, [selectedCategory, sortOption]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
   
   const handleCategoryChange = (categoryId: string) => {
     setSearchParams(prev => {
@@ -65,11 +103,34 @@ const ProductsPage: React.FC = () => {
     });
   }
 
+  const renderContent = () => {
+    if (loading) {
+      return <div className="flex justify-center items-center h-96"><Spinner /></div>;
+    }
+    if (error) {
+      return (
+        <div className="text-center py-20 bg-brand-dark-light rounded-lg">
+          <p className="text-xl text-red-400">{error}</p>
+          <Button className="mt-6" onClick={fetchData}>Retry</Button>
+        </div>
+      );
+    }
+    if (products.length > 0) {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {products.map(product => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      );
+    }
+    return <p className="text-center text-gray-400 py-20">No cycles found for this selection.</p>;
+  };
+
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-4xl font-bold text-center text-white mb-10">All Our Cycles</h1>
       <div className="flex flex-col md:flex-row gap-8">
-        {/* Filters */}
         <aside className="w-full md:w-1/4 lg:w-1/5">
           <div className="sticky top-20">
             <h2 className="text-xl font-semibold text-brand-orange mb-4">Categories</h2>
@@ -96,7 +157,6 @@ const ProductsPage: React.FC = () => {
           </div>
         </aside>
         
-        {/* Product Grid */}
         <main className="w-full md:w-3/4 lg:w-4/5">
           <div className="flex justify-between items-center mb-6">
              <p className="text-gray-400">{products.length} products found</p>
@@ -107,17 +167,7 @@ const ProductsPage: React.FC = () => {
                 <option value="name-asc">Name: A to Z</option>
              </select>
           </div>
-          {loading ? (
-            <div className="flex justify-center items-center h-96"><Spinner /></div>
-          ) : products.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {products.map(product => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-center text-gray-400 py-20">No products found for this selection.</p>
-          )}
+          {renderContent()}
         </main>
       </div>
     </div>

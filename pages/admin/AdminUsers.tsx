@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import Spinner from '../../components/ui/Spinner';
 import { Profile } from '../../types';
+import Button from '../../components/ui/Button';
 
 type UserWithEmail = Profile & {
     users: { email: string; created_at: string } | null;
@@ -12,42 +13,59 @@ type UserWithEmail = Profile & {
 const AdminUsers: React.FC = () => {
     const [users, setUsers] = useState<UserWithEmail[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const isMounted = useRef(true);
+
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+          isMounted.current = false;
+        };
+    }, []);
 
     const fetchUsers = useCallback(async () => {
+        if (!isMounted.current) return;
         setLoading(true);
-        // This is a bit tricky. We need to fetch profiles and then somehow get their auth email.
-        // A database function would be better, but for simplicity, let's fetch profiles first.
-        // NOTE: For production, a paginated query or a VIEW/RPC in Supabase would be more performant.
-        const { data, error } = await supabase
-            .from('profiles')
-            .select(`
-                *,
-                users:id (
-                    email,
-                    created_at
-                )
-            `)
-            .order('role', { ascending: true });
+        setError(null);
+        try {
+            const { data, error: dbError } = await supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    users:id (
+                        email,
+                        created_at
+                    )
+                `)
+                .order('role', { ascending: true });
 
+            if (dbError) throw dbError;
+            if (isMounted.current) setUsers(data as UserWithEmail[]);
 
-        if (data) {
-            setUsers(data as UserWithEmail[]);
+        } catch (err: any) {
+            if (!isMounted.current) return;
+            console.error("Error fetching users:", err);
+            setError("Could not load users. Please try again.");
+        } finally {
+            if (isMounted.current) setLoading(false);
         }
-        if (error) {
-            console.error("Error fetching users:", error);
-        }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
 
-    if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>;
-
-    return (
-        <div>
-            <h1 className="text-3xl font-bold text-white mb-6">Manage Users</h1>
+    const renderContent = () => {
+        if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>;
+        if (error) {
+            return (
+              <div className="text-center py-20 bg-brand-dark-light rounded-lg">
+                <p className="text-xl text-red-400">{error}</p>
+                <Button className="mt-6" onClick={fetchUsers}>Retry</Button>
+              </div>
+            );
+        }
+        return (
             <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-300">
                     <thead className="text-xs text-gray-400 uppercase bg-brand-gray">
@@ -74,6 +92,13 @@ const AdminUsers: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+        );
+    }
+
+    return (
+        <div>
+            <h1 className="text-3xl font-bold text-white mb-6">Manage Users</h1>
+            {renderContent()}
         </div>
     );
 };

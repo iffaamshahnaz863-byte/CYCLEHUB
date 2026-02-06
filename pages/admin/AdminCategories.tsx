@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import { Category } from '../../types';
 import Spinner from '../../components/ui/Spinner';
@@ -10,16 +10,35 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 const AdminCategories: React.FC = () => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [formState, setFormState] = useState<Partial<Category>>({});
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const isMounted = useRef(true);
+
+    useEffect(() => {
+        isMounted.current = true;
+        return () => {
+          isMounted.current = false;
+        };
+    }, []);
 
     const fetchCategories = useCallback(async () => {
+        if (!isMounted.current) return;
         setLoading(true);
-        const { data } = await supabase.from('categories').select('*').order('created_at', { ascending: false });
-        if (data) setCategories(data);
-        setLoading(false);
+        setError(null);
+        try {
+            const { data, error: dbError } = await supabase.from('categories').select('*').order('created_at', { ascending: false });
+            if (dbError) throw dbError;
+            if (isMounted.current) setCategories(data);
+        } catch (err: any) {
+            if (!isMounted.current) return;
+            console.error("Error fetching categories:", err);
+            setError("Could not load categories. Please try again.");
+        } finally {
+            if (isMounted.current) setLoading(false);
+        }
     }, []);
 
     useEffect(() => {
@@ -49,30 +68,31 @@ const AdminCategories: React.FC = () => {
         e.preventDefault();
         if (!formState.name) return;
         
-        let imageUrl = formState.image_url;
-
-        if (imageFile) {
-            const fileName = `${Date.now()}-${imageFile.name}`;
-            const { data, error } = await supabase.storage.from('category_images').upload(fileName, imageFile);
-            if (error) {
-                alert('Error uploading image: ' + error.message);
-                return;
+        try {
+            let imageUrl = formState.image_url;
+            if (imageFile) {
+                const fileName = `${Date.now()}-${imageFile.name}`;
+                const { data, error } = await supabase.storage.from('category_images').upload(fileName, imageFile);
+                if (error) throw error;
+                const { data: { publicUrl } } = supabase.storage.from('category_images').getPublicUrl(data.path);
+                imageUrl = publicUrl;
             }
-            const { data: { publicUrl } } = supabase.storage.from('category_images').getPublicUrl(data.path);
-            imageUrl = publicUrl;
-        }
 
-        const categoryData = { name: formState.name, image_url: imageUrl };
+            const categoryData = { name: formState.name, image_url: imageUrl };
 
-        if (editingCategory) {
-            const { error } = await supabase.from('categories').update(categoryData).eq('id', editingCategory.id);
-            if (error) alert(error.message);
-        } else {
-            const { error } = await supabase.from('categories').insert(categoryData);
-            if (error) alert(error.message);
+            if (editingCategory) {
+                const { error } = await supabase.from('categories').update(categoryData).eq('id', editingCategory.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase.from('categories').insert(categoryData);
+                if (error) throw error;
+            }
+            fetchCategories();
+            closeModal();
+        } catch(err: any) {
+            console.error("Error saving category:", err);
+            alert(`Failed to save category: ${err.message}`);
         }
-        fetchCategories();
-        closeModal();
     };
 
     const handleDelete = async (categoryId: string) => {
@@ -83,14 +103,17 @@ const AdminCategories: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>
-
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-white">Manage Categories</h1>
-                <Button onClick={() => openModal()}><Plus className="mr-2" />Add Category</Button>
-            </div>
+    const renderContent = () => {
+        if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>;
+        if (error) {
+            return (
+              <div className="text-center py-20 bg-brand-dark-light rounded-lg">
+                <p className="text-xl text-red-400">{error}</p>
+                <Button className="mt-6" onClick={fetchCategories}>Retry</Button>
+              </div>
+            );
+        }
+        return (
             <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
                 <table className="w-full text-sm text-left text-gray-300">
                     <thead className="text-xs text-gray-400 uppercase bg-brand-gray">
@@ -112,7 +135,16 @@ const AdminCategories: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+        );
+    }
 
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-white">Manage Categories</h1>
+                <Button onClick={() => openModal()}><Plus className="mr-2" />Add Category</Button>
+            </div>
+            {renderContent()}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
                     <div className="bg-brand-dark-light p-8 rounded-lg w-full max-w-md">
@@ -121,7 +153,7 @@ const AdminCategories: React.FC = () => {
                             <Input label="Category Name" name="name" value={formState.name || ''} onChange={handleFormChange} required />
                             <div>
                                 <label className="block text-sm font-medium mb-1">Image</label>
-                                <input type="file" onChange={handleImageChange} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-yellow file:text-brand-dark hover:file:bg-yellow-300"/>
+                                <input type="file" onChange={handleImageChange} className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-orange file:text-brand-dark hover:file:bg-orange-500"/>
                                 {formState.image_url && !imageFile && <img src={formState.image_url} alt="current" className="w-20 h-20 object-cover mt-2 rounded-md"/>}
                             </div>
                             <div className="flex justify-end space-x-4 pt-4">

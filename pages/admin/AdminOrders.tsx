@@ -1,24 +1,42 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import { OrderWithItems, OrderStatus, ALL_ORDER_STATUSES } from '../../types';
 import Spinner from '../../components/ui/Spinner';
+import Button from '../../components/ui/Button';
 
 const AdminOrders: React.FC = () => {
   const [orders, setOrders] = useState<(OrderWithItems & { profiles: { full_name: string, email: string } | null })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchOrders = useCallback(async () => {
+    if (!isMounted.current) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*, order_items(*, products(name)), profiles(full_name, email)')
-      .order('created_at', { ascending: false });
+    setError(null);
+    try {
+        const { data, error: dbError } = await supabase
+          .from('orders')
+          .select('*, order_items(*, products(name)), profiles(full_name, email)')
+          .order('created_at', { ascending: false });
 
-    if (data) {
-      setOrders(data as any);
+        if (dbError) throw dbError;
+        if (isMounted.current) setOrders(data as any);
+    } catch (err: any) {
+        if (!isMounted.current) return;
+        console.error("Error fetching orders:", err);
+        setError("Could not load orders. Please try again.");
+    } finally {
+        if (isMounted.current) setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -46,12 +64,18 @@ const AdminOrders: React.FC = () => {
     }
   }
 
-  if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>;
-
-  return (
-    <div>
-      <h1 className="text-3xl font-bold text-white mb-6">Manage Orders</h1>
-      <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
+  const renderContent = () => {
+    if (loading) return <div className="h-full flex items-center justify-center"><Spinner /></div>;
+    if (error) {
+        return (
+          <div className="text-center py-20 bg-brand-dark-light rounded-lg">
+            <p className="text-xl text-red-400">{error}</p>
+            <Button className="mt-6" onClick={fetchOrders}>Retry</Button>
+          </div>
+        );
+    }
+    return (
+        <div className="bg-brand-dark-light shadow-md rounded-lg overflow-x-auto">
         <table className="w-full text-sm text-left text-gray-300">
           <thead className="text-xs text-gray-400 uppercase bg-brand-gray">
             <tr>
@@ -85,6 +109,13 @@ const AdminOrders: React.FC = () => {
           </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 className="text-3xl font-bold text-white mb-6">Manage Orders</h1>
+      {renderContent()}
     </div>
   );
 };
