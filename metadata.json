@@ -1,0 +1,5 @@
+{
+  "name": "DAR CYCLE HUB",
+  "description": "A modern e-commerce application for a cycle shop, featuring user authentication, product management, a shopping cart, and an order system, all powered by React, Tailwind CSS, and Supabase.",
+  "requestFramePermissions": []
+}
