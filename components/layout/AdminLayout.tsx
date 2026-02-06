@@ -10,8 +10,13 @@ const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error logging out:", error);
+      alert("Could not log out. Please try again.");
+    } else {
+      navigate('/');
+    }
   };
 
   const navItems = [

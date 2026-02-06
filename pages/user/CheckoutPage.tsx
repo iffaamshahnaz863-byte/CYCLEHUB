@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../services/supabase';
@@ -12,36 +12,71 @@ const CheckoutPage: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItemWithProduct[]>([]);
   const [shippingAddress, setShippingAddress] = useState<Partial<Profile>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [placingOrder, setPlacingOrder] = useState(false);
   const navigate = useNavigate();
-
-  const fetchCartItems = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from('cart')
-      .select('*, products(*)')
-      .eq('user_id', user.id);
-    if (data) {
-      if(data.length === 0) {
-        navigate('/cart');
-      }
-      setCartItems(data as CartItemWithProduct[]);
-    }
-  }, [user, navigate]);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetchCartItems();
-    if (profile) {
-      setShippingAddress({
-        full_name: profile.full_name,
-        phone: profile.phone,
-        address: profile.address,
-        pincode: profile.pincode
-      });
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const loadCheckoutData = useCallback(async () => {
+    if (!user || !profile) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  }, [profile, fetchCartItems]);
+    if (!isMounted.current) return;
+
+    setLoading(true);
+    setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const { data, error: dbError } = await supabase
+        .from('cart')
+        .select('*, products(*)')
+        .eq('user_id', user.id)
+        .abortSignal(controller.signal);
+
+      if (dbError) throw dbError;
+
+      if (isMounted.current) {
+        if (!data || data.length === 0) {
+          navigate('/cart');
+          return;
+        }
+        setCartItems(data as CartItemWithProduct[]);
+        setShippingAddress({
+          full_name: profile.full_name,
+          phone: profile.phone,
+          address: profile.address,
+          pincode: profile.pincode,
+        });
+      }
+    } catch (err: any) {
+      if (!isMounted.current) return;
+      console.error("Failed to load checkout data:", err);
+      if (err.name === 'AbortError') {
+        setError('The request took too long. Please try again.');
+      } else {
+        setError('Failed to load your information. Please try again.');
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  }, [user, profile, navigate]);
+
+  useEffect(() => {
+    loadCheckoutData();
+  }, [loadCheckoutData]);
 
   const handlePlaceOrder = async () => {
     if (!user || !shippingAddress.full_name || !shippingAddress.address || !shippingAddress.phone || !shippingAddress.pincode) {
@@ -51,64 +86,52 @@ const CheckoutPage: React.FC = () => {
     }
     
     setPlacingOrder(true);
-    
-    const total_amount = cartTotal;
 
-    // Create the order
-    const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-            user_id: user.id,
-            total_amount,
-            shipping_address: {
-                full_name: shippingAddress.full_name,
-                phone: shippingAddress.phone,
-                address: shippingAddress.address,
-                pincode: shippingAddress.pincode
-            },
-            payment_method: 'cod'
-        })
-        .select()
-        .single();
-    
-    if (orderError || !orderData) {
-        alert('Failed to create order: ' + orderError?.message);
+    try {
+        const total_amount = cartTotal;
+
+        const { data: orderData, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+                user_id: user.id,
+                total_amount,
+                shipping_address: {
+                    full_name: shippingAddress.full_name,
+                    phone: shippingAddress.phone,
+                    address: shippingAddress.address,
+                    pincode: shippingAddress.pincode
+                },
+                payment_method: 'cod'
+            })
+            .select()
+            .single();
+        
+        if (orderError) throw orderError;
+
+        const orderItems = cartItems.map(item => ({
+            order_id: orderData.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price: item.products?.discount_price ?? item.products?.price ?? 0
+        }));
+
+        const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+        if (itemsError) throw itemsError;
+
+        const { error: cartClearError } = await supabase.from('cart').delete().eq('user_id', user.id);
+        if (cartClearError) {
+            console.error("Failed to clear cart, but order was placed:", cartClearError);
+        }
+
+        alert('Order placed successfully!');
+        navigate('/orders');
+
+    } catch (err: any) {
+        console.error("Error placing order:", err);
+        alert(`Failed to place order: ${err.message}`);
+    } finally {
         setPlacingOrder(false);
-        return;
     }
-
-    // Create order items
-    const orderItems = cartItems.map(item => ({
-        order_id: orderData.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: item.products?.discount_price ?? item.products?.price ?? 0
-    }));
-
-    const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-    
-    if (itemsError) {
-        alert('Failed to add items to order. Please contact support.');
-        // Consider deleting the created order here for consistency
-        setPlacingOrder(false);
-        return;
-    }
-
-    // Clear the cart
-    const { error: cartClearError } = await supabase
-        .from('cart')
-        .delete()
-        .eq('user_id', user.id);
-    
-    if(cartClearError) {
-        console.error("Failed to clear cart, but order was placed.");
-    }
-
-    alert('Order placed successfully!');
-    navigate('/orders');
-    setPlacingOrder(false);
   };
   
   const cartTotal = cartItems.reduce((total, item) => {
@@ -117,6 +140,15 @@ const CheckoutPage: React.FC = () => {
   }, 0);
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Spinner /></div>;
+  
+  if (error) {
+    return (
+        <div className="container mx-auto text-center py-20">
+            <p className="text-red-400 mb-4">{error}</p>
+            <Button onClick={loadCheckoutData}>Retry</Button>
+        </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
