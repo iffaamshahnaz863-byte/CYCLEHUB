@@ -72,12 +72,12 @@ const ProductsPage: React.FC = () => {
         {/* Filters */}
         <aside className="w-full md:w-1/4 lg:w-1/5">
           <div className="sticky top-20">
-            <h2 className="text-xl font-semibold text-brand-yellow mb-4">Categories</h2>
+            <h2 className="text-xl font-semibold text-brand-orange mb-4">Categories</h2>
             <ul className="space-y-2">
               <li>
                 <button
                   onClick={() => handleCategoryChange('')}
-                  className={`w-full text-left px-3 py-2 rounded-md ${!selectedCategory ? 'bg-brand-yellow text-brand-dark' : 'hover:bg-brand-gray'}`}
+                  className={`w-full text-left px-3 py-2 rounded-md ${!selectedCategory ? 'bg-brand-orange text-white' : 'hover:bg-brand-gray'}`}
                 >
                   All
                 </button>
@@ -86,7 +86,7 @@ const ProductsPage: React.FC = () => {
                 <li key={cat.id}>
                   <button
                     onClick={() => handleCategoryChange(cat.id)}
-                    className={`w-full text-left px-3 py-2 rounded-md ${selectedCategory === cat.id ? 'bg-brand-yellow text-brand-dark' : 'hover:bg-brand-gray'}`}
+                    className={`w-full text-left px-3 py-2 rounded-md ${selectedCategory === cat.id ? 'bg-brand-orange text-white' : 'hover:bg-brand-gray'}`}
                   >
                     {cat.name}
                   </button>

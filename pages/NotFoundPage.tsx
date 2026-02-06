@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 const NotFoundPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center h-screen text-center bg-brand-dark px-4">
-      <h1 className="text-9xl font-extrabold text-brand-yellow tracking-widest">404</h1>
+      <h1 className="text-9xl font-extrabold text-brand-orange tracking-widest">404</h1>
       <div className="bg-brand-dark-light px-2 text-sm rounded rotate-12 absolute">
         Page Not Found
       </div>

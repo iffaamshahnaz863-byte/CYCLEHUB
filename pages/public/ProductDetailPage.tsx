@@ -99,7 +99,7 @@ const ProductDetailPage: React.FC = () => {
               <button 
                 key={index} 
                 onClick={() => setSelectedImage(img)}
-                className={`aspect-w-1 aspect-h-1 rounded-md overflow-hidden ring-2 ${selectedImage === img ? 'ring-brand-yellow' : 'ring-transparent'}`}
+                className={`aspect-w-1 aspect-h-1 rounded-md overflow-hidden ring-2 ${selectedImage === img ? 'ring-brand-orange' : 'ring-transparent'}`}
               >
                 <img src={img} alt={`${product.name} thumbnail ${index + 1}`} className="w-full h-full object-cover"/>
               </button>
@@ -111,7 +111,7 @@ const ProductDetailPage: React.FC = () => {
         <div className="py-4">
           <h1 className="text-3xl lg:text-4xl font-bold text-white">{product.name}</h1>
           <div className="mt-4 flex items-baseline">
-            <p className="text-3xl font-bold text-brand-yellow">₹{displayPrice.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-brand-orange">₹{displayPrice.toLocaleString()}</p>
             {originalPrice && (
               <p className="ml-3 text-lg text-gray-500 line-through">₹{originalPrice.toLocaleString()}</p>
             )}

@@ -34,7 +34,7 @@ const LoginPage: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-brand-dark px-4">
       <div className="w-full max-w-md p-8 space-y-6 bg-brand-dark-light rounded-lg shadow-lg">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-brand-yellow">DAR CYCLE HUB</h1>
+          <h1 className="text-3xl font-bold text-brand-orange">DAR CYCLE HUB</h1>
           <p className="mt-2 text-gray-300">Welcome back! Please login to your account.</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-6">
@@ -56,7 +56,7 @@ const LoginPage: React.FC = () => {
           />
           <div className="flex items-center justify-between">
             <div/>
-            <Link to="/forgot-password" className="text-sm text-brand-yellow hover:underline">
+            <Link to="/forgot-password" className="text-sm text-brand-orange hover:underline">
               Forgot Password?
             </Link>
           </div>
@@ -67,7 +67,7 @@ const LoginPage: React.FC = () => {
         </form>
         <p className="text-sm text-center text-gray-400">
           Don't have an account?{' '}
-          <Link to="/signup" className="font-medium text-brand-yellow hover:underline">
+          <Link to="/signup" className="font-medium text-brand-orange hover:underline">
             Sign up
           </Link>
         </p>

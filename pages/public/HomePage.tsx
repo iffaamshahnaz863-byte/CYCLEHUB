@@ -46,7 +46,7 @@ const HomePage: React.FC = () => {
       <section className="bg-brand-dark-light">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 text-center">
           <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-tight">
-            Find Your <span className="text-brand-yellow">Perfect Ride</span>
+            Find Your <span className="bg-gradient-to-r from-brand-orange to-brand-pink bg-clip-text text-transparent">Perfect Ride</span>
           </h1>
           <p className="mt-4 text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">
             Explore our premium collection of cycles for every terrain and adventure. Quality, performance, and style, delivered.
@@ -54,7 +54,7 @@ const HomePage: React.FC = () => {
           <div className="mt-8">
             <Link
               to="/products"
-              className="inline-block bg-brand-yellow text-brand-dark font-bold py-3 px-8 rounded-lg hover:bg-yellow-400 transition-colors duration-300 text-lg"
+              className="inline-block bg-gradient-to-r from-brand-orange to-brand-pink text-white font-bold py-3 px-8 rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 text-lg"
             >
               Shop Now
             </Link>

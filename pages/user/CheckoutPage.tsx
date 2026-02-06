@@ -124,7 +124,7 @@ const CheckoutPage: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Shipping Details */}
         <div className="lg:w-2/3 bg-brand-dark-light p-6 rounded-lg">
-          <h2 className="text-2xl font-semibold mb-4 text-brand-yellow">Shipping Address</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-brand-orange">Shipping Address</h2>
           <div className="space-y-4">
             <div><strong>Name:</strong> {shippingAddress.full_name}</div>
             <div><strong>Phone:</strong> {shippingAddress.phone}</div>
@@ -151,7 +151,7 @@ const CheckoutPage: React.FC = () => {
           </div>
           <div className="flex justify-between py-2">
             <span>Payment Method</span>
-            <span className="font-semibold text-brand-yellow">Cash on Delivery (COD)</span>
+            <span className="font-semibold text-brand-orange">Cash on Delivery (COD)</span>
           </div>
           <div className="flex justify-between py-2 font-bold text-xl mt-4 border-t border-brand-gray">
             <span>Total</span>

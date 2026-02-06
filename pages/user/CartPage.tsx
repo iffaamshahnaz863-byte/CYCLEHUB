@@ -74,7 +74,7 @@ const CartPage: React.FC = () => {
                   <img src={item.products.images?.[0] || ''} alt={item.products.name} className="w-24 h-24 object-cover rounded-md" />
                   <div className="flex-grow ml-4">
                     <h2 className="font-semibold text-lg">{item.products.name}</h2>
-                    <p className="text-brand-yellow">₹{(item.products.discount_price ?? item.products.price).toLocaleString()}</p>
+                    <p className="text-brand-orange">₹{(item.products.discount_price ?? item.products.price).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center space-x-3">
                     <button onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)} className="px-2 py-1 border border-brand-gray rounded-md">-</button>

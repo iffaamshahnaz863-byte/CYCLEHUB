@@ -37,7 +37,7 @@ const AdminOrders: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch(status) {
         case 'pending': return 'bg-gray-500';
-        case 'confirmed': return 'bg-blue-500';
+        case 'confirmed': return 'bg-brand-blue';
         case 'packed': return 'bg-indigo-500';
         case 'shipped': return 'bg-purple-500';
         case 'delivered': return 'bg-green-500';

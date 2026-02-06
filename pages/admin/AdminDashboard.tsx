@@ -51,9 +51,9 @@ const AdminDashboard: React.FC = () => {
       <h1 className="text-3xl font-bold text-white mb-6">Admin Dashboard</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard icon={DollarSign} title="Total Revenue" value={`₹${stats.revenue.toLocaleString()}`} color="green" />
-        <StatCard icon={ShoppingCart} title="Total Orders" value={stats.orders} color="yellow" />
+        <StatCard icon={ShoppingCart} title="Total Orders" value={stats.orders} color="orange" />
         <StatCard icon={Package} title="Total Products" value={stats.products} color="blue" />
-        <StatCard icon={Users} title="Total Users" value={stats.users} color="purple" />
+        <StatCard icon={Users} title="Total Users" value={stats.users} color="pink" />
       </div>
 
       <div className="mt-10 bg-brand-dark-light p-6 rounded-lg">

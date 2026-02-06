@@ -24,7 +24,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="p-4">
           <h3 className="text-lg font-semibold text-gray-200 truncate">{product.name}</h3>
           <div className="mt-2 flex items-baseline">
-            <p className="text-xl font-bold text-brand-yellow">₹{displayPrice.toLocaleString()}</p>
+            <p className="text-xl font-bold text-brand-orange">₹{displayPrice.toLocaleString()}</p>
             {originalPrice && (
               <p className="ml-2 text-sm text-gray-500 line-through">₹{originalPrice.toLocaleString()}</p>
             )}

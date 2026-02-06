@@ -64,7 +64,7 @@ const AdminUsers: React.FC = () => {
                                 <td className="px-6 py-4 font-medium">{user.full_name || 'N/A'}</td>
                                 <td className="px-6 py-4">{user.users?.email}</td>
                                 <td className="px-6 py-4">
-                                    <span className={`px-2 py-1 rounded-full text-xs capitalize ${user.role === 'admin' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-blue-500/30 text-blue-300'}`}>
+                                    <span className={`px-2 py-1 rounded-full text-xs capitalize ${user.role === 'admin' ? 'bg-orange-500/30 text-orange-300' : 'bg-blue-500/30 text-blue-300'}`}>
                                         {user.role}
                                     </span>
                                 </td>

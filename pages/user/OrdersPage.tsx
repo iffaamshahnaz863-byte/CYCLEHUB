@@ -32,7 +32,7 @@ const OrdersPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch(status) {
         case 'pending': return 'bg-gray-500';
-        case 'confirmed': return 'bg-blue-500';
+        case 'confirmed': return 'bg-brand-blue';
         case 'packed': return 'bg-indigo-500';
         case 'shipped': return 'bg-purple-500';
         case 'delivered': return 'bg-green-500';
@@ -62,7 +62,7 @@ const OrdersPage: React.FC = () => {
                   <p className="text-sm text-gray-400">Placed on: {new Date(order.created_at).toLocaleDateString()}</p>
                 </div>
                 <div className="mt-4 sm:mt-0 text-right">
-                    <p className="text-xl font-bold text-brand-yellow">₹{order.total_amount.toLocaleString()}</p>
+                    <p className="text-xl font-bold text-brand-orange">₹{order.total_amount.toLocaleString()}</p>
                     <span className={`text-xs font-semibold capitalize px-2 py-1 rounded-full text-white ${getStatusColor(order.status)}`}>
                         {order.status}
                     </span>

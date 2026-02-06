@@ -26,7 +26,9 @@ const AdminLayout: React.FC = () => {
     <div className="flex h-screen bg-brand-dark text-gray-200">
       <aside className="w-64 flex-shrink-0 bg-brand-dark-light p-4 flex flex-col justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-brand-yellow mb-8 text-center">DAR CYCLE HUB</h1>
+          <h1 className="text-2xl font-bold mb-8 text-center bg-gradient-to-r from-brand-orange to-brand-pink bg-clip-text text-transparent">
+            DAR CYCLE HUB
+          </h1>
           <nav className="space-y-2">
             {navItems.map((item) => (
               <NavLink
@@ -35,7 +37,7 @@ const AdminLayout: React.FC = () => {
                 className={({ isActive }) =>
                   `flex items-center px-4 py-2 rounded-md transition-colors ${
                     isActive
-                      ? 'bg-brand-yellow text-brand-dark'
+                      ? 'bg-brand-orange text-white'
                       : 'hover:bg-brand-gray'
                   }`
                 }
